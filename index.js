@@ -7,14 +7,24 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const TOKEN = process.env.BOT_TOKEN;
 
-// Guarda os títulos já publicados para não repetir
 const noticiasPublicadas = new Set();
 
-// Palavras-chave que filtram só notícias de mercado/transferências
-const PALAVRAS_CHAVE = [
-  'mercado', 'transfere', 'reforço', 'assina', 'contrato',
-  'oficial', 'emprestado', 'contratado', 'negociação',
-  'proposta', 'acordo', 'saída', 'chegada'
+// Palavras que DEVEM aparecer para publicar
+const PALAVRAS_TRANSFERENCIA = [
+  'reforço', 'contratado', 'assina', 'oficializa contratação',
+  'fecha acordo', 'transfere', 'emprestado', 'cedido',
+  'contrato até', 'acordo fechado', 'oficializa reforço',
+  'apresentado', 'novo reforço', 'chega ao', 'chega a',
+  'acerta contrato', 'vincula', 'assina por'
+];
+
+// Palavras que BLOQUEIAM a notícia mesmo que passe o filtro anterior
+const PALAVRAS_BLOQUEIO = [
+  'treinador', 'seleção', 'lesão', 'suspenso', 'convocado',
+  'declarações', 'entrevista', 'antevisão', 'confere',
+  'jogo', 'resultado', 'derrota', 'vitória', 'empate',
+  'golos', 'expulso', 'cartão', 'árbitro', 'liga',
+  'champions', 'taça', 'supertaça', 'mundial'
 ];
 
 const FEEDS = [
@@ -38,30 +48,45 @@ const FEEDS = [
   }
 ];
 
-function contemPalavraChave(texto) {
-  const textoLower = texto.toLowerCase();
-  return PALAVRAS_CHAVE.some(palavra => textoLower.includes(palavra));
+// Limpa o CDATA e outros artefactos do XML
+function limparTexto(texto) {
+  if (!texto) return '';
+  return texto
+    .replace(/<!\[CDATA\[|\]\]>/gi, '')  // remove CDATA
+    .replace(/<[^>]+>/g, '')              // remove tags HTML
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+function eTransferencia(titulo, descricao) {
+  const texto = (titulo + ' ' + descricao).toLowerCase();
+
+  // Bloqueia se tiver palavras de bloqueio
+  if (PALAVRAS_BLOQUEIO.some(p => texto.includes(p))) return false;
+
+  // Só passa se tiver palavras de transferência
+  return PALAVRAS_TRANSFERENCIA.some(p => texto.includes(p));
 }
 
 async function verificarFeed(feed, channel) {
   try {
     const dados = await parser.parseURL(feed.url);
 
-    for (const item of dados.items.slice(0, 10)) {
-      const titulo = item.title || '';
+    for (const item of dados.items.slice(0, 15)) {
+      const titulo = limparTexto(item.title);
       const link = item.link || '';
-      const descricao = item.contentSnippet || item.content || '';
+      const descricao = limparTexto(item.contentSnippet || item.content || '');
 
-      // Ignora se já foi publicado
+      if (!titulo) continue;
       if (noticiasPublicadas.has(titulo)) continue;
+      if (!eTransferencia(titulo, descricao)) continue;
 
-      // Filtra só notícias relevantes de mercado
-      if (!contemPalavraChave(titulo) && !contemPalavraChave(descricao)) continue;
-
-      // Marca como publicado
       noticiasPublicadas.add(titulo);
 
-      // Cria o embed
       const embed = new EmbedBuilder()
         .setTitle(`${feed.emoji} ${titulo}`)
         .setColor(feed.cor)
@@ -70,15 +95,12 @@ async function verificarFeed(feed, channel) {
         .setTimestamp();
 
       if (descricao) {
-        embed.setDescription(descricao.length > 200
-          ? descricao.substring(0, 200) + '...'
-          : descricao
+        embed.setDescription(
+          descricao.length > 250 ? descricao.substring(0, 250) + '...' : descricao
         );
       }
 
       await channel.send({ embeds: [embed] });
-
-      // Pequena pausa entre mensagens para não sobrecarregar
       await new Promise(r => setTimeout(r, 1000));
     }
   } catch (e) {
@@ -90,7 +112,6 @@ async function verificarTodos() {
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
     if (!channel) return;
-
     for (const feed of FEEDS) {
       await verificarFeed(feed, channel);
     }
@@ -102,14 +123,14 @@ async function verificarTodos() {
 client.once('ready', async () => {
   console.log(`Bot online: ${client.user.tag}`);
 
-  // Primeira verificação ao arrancar (sem publicar — só marca como já vistas)
-  // Isto evita que ao ligar o bot publique 30 notícias antigas de uma vez
-  console.log('A carregar notícias já existentes...');
+  // Pré-carrega notícias existentes sem publicar
+  console.log('A carregar notícias existentes...');
   for (const feed of FEEDS) {
     try {
       const dados = await parser.parseURL(feed.url);
-      for (const item of dados.items.slice(0, 10)) {
-        if (item.title) noticiasPublicadas.add(item.title);
+      for (const item of dados.items.slice(0, 15)) {
+        const titulo = limparTexto(item.title);
+        if (titulo) noticiasPublicadas.add(titulo);
       }
     } catch (e) {
       console.error(`Erro ao pré-carregar ${feed.nome}:`, e.message);
