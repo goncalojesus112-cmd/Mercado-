@@ -35,6 +35,12 @@ const FEEDS = [
     emoji: '🔴'
   },
   {
+    nome: 'A Bola Internacional',
+    url: 'https://www.abola.pt/rss/internacional',
+    cor: 0xFF0000,
+    emoji: '🌍'
+  },
+  {
     nome: 'Record',
     url: 'https://www.record.pt/rss',
     cor: 0x006400,
@@ -45,8 +51,15 @@ const FEEDS = [
     url: 'https://www.ojogo.pt/rss/Noticias.rss',
     cor: 0xFF8C00,
     emoji: '🟠'
+  },
+  {
+    nome: 'Maisfutebol',
+    url: 'https://maisfutebol.iol.pt/rss/transferencias',
+    cor: 0x0099FF,
+    emoji: '🔵'
   }
 ];
+
 
 // Limpa o CDATA e outros artefactos do XML
 function limparTexto(texto) {
