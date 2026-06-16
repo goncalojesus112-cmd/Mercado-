@@ -1,3 +1,4 @@
+const { verificarFabrizio } = require('./fabrizio');
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const Parser = require('rss-parser');
 const parser = new Parser();
