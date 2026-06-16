@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
-const cron = require('node-cron');
+
 const axios = require('axios');
 const Parser = require('rss-parser');
 const parser = new Parser();
