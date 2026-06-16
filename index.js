@@ -33,9 +33,7 @@ const EXCLUIR_EN = [
 ];
 
 const FEEDS_PT = [
-  { nome: 'A Bola', url: 'https://www.abola.pt/rss/index.aspx', cor: 0xFF0000, emoji: '🔴' },
   { nome: 'Record', url: 'https://www.record.pt/rss', cor: 0x006400, emoji: '🟢' },
-  { nome: 'O Jogo', url: 'https://www.ojogo.pt/rss/Noticias.rss', cor: 0xFF8C00, emoji: '🟠' },
   { nome: 'Maisfutebol', url: 'https://maisfutebol.iol.pt/rss/transferencias', cor: 0x0099FF, emoji: '🔵' }
 ];
 
@@ -136,9 +134,14 @@ async function verificarFabrizio(channel) {
       const descricao = limparTexto(item.contentSnippet || '');
       const link = item.link || '';
 
-      if (noticiasPublicadas.has(titulo)) continue;
+      console.log(`Fabrizio: a analisar — "${titulo}"`);
+
+      if (noticiasPublicadas.has(titulo)) {
+        console.log(`Fabrizio: já publicado anteriormente — ignorado`);
+        continue;
+      }
       if (!eTransferenciaEN(titulo) && !eTransferenciaEN(descricao)) {
-        console.log(`Fabrizio: ignorado (não é transferência) — "${titulo}"`);
+        console.log(`Fabrizio: não bate nas palavras-chave — ignorado`);
         continue;
       }
 
@@ -159,7 +162,7 @@ async function verificarFabrizio(channel) {
       if (descTraduzida) embed.setDescription(descTraduzida);
 
       await channel.send({ embeds: [embed] });
-      console.log(`Fabrizio: publicado — "${titulo}"`);
+      console.log(`Fabrizio: PUBLICADO — "${titulo}"`);
       await new Promise(r => setTimeout(r, 1500));
     }
   } catch (e) {
@@ -204,7 +207,16 @@ client.once('ready', async () => {
 
   console.log(`${noticiasPublicadas.size} notícias carregadas. Bot pronto!`);
 
+  // Teste imediato do Fabrizio ao arrancar (depois de marcar as existentes,
+  // mas vamos forçar a publicar uma para confirmar que está tudo a funcionar)
+  console.log('--- TESTE INICIAL: a forçar verificação do Fabrizio ---');
+  await verificarFabrizio(channel_de_teste());
+
   setInterval(verificarTodos, 30 * 60 * 1000);
 });
+
+function channel_de_teste() {
+  return client.channels.cache.get(CHANNEL_ID);
+}
 
 client.login(TOKEN);
