@@ -1,6 +1,9 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const Parser = require('rss-parser');
-const parser = new Parser();
+
+const parser = new Parser({
+  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36' }
+});
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
@@ -30,8 +33,7 @@ const EXCLUIR_EN = [
 ];
 
 const FEEDS_PT = [
-  { nome: 'A Bola', url: 'https://www.abola.pt/rss/mercado', cor: 0xFF0000, emoji: '🔴' },
-  { nome: 'A Bola Internacional', url: 'https://www.abola.pt/rss/internacional', cor: 0xFF0000, emoji: '🌍' },
+  { nome: 'A Bola', url: 'https://www.abola.pt/rss/index.aspx', cor: 0xFF0000, emoji: '🔴' },
   { nome: 'Record', url: 'https://www.record.pt/rss', cor: 0x006400, emoji: '🟢' },
   { nome: 'O Jogo', url: 'https://www.ojogo.pt/rss/Noticias.rss', cor: 0xFF8C00, emoji: '🟠' },
   { nome: 'Maisfutebol', url: 'https://maisfutebol.iol.pt/rss/transferencias', cor: 0x0099FF, emoji: '🔵' }
@@ -94,7 +96,6 @@ async function verificarFeedPT(feed, channel) {
       const link = item.link || '';
       const descricao = limparTexto(item.contentSnippet || item.content || '');
 
-      // Usa o título limpo como chave para evitar duplicados
       if (noticiasPublicadas.has(titulo)) continue;
       if (!contemPalavraChavePT(titulo) && !contemPalavraChavePT(descricao)) continue;
 
