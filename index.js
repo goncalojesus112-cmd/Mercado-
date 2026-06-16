@@ -1,6 +1,4 @@
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
-
-const axios = require('axios');
 const Parser = require('rss-parser');
 const parser = new Parser();
 
@@ -26,44 +24,31 @@ const PALAVRAS_TRANSFER_EN = [
   'release clause', 'option', 'agent'
 ];
 
-// Palavras a excluir do Fabrizio (não são transferências)
 const EXCLUIR_EN = [
   'injury', 'goal', 'match', 'preview', 'result',
   'lineup', 'tactical', 'press conference', 'podcast'
 ];
 
 const FEEDS_PT = [
-  {
-    nome: 'A Bola',
-    url: 'https://www.abola.pt/rss/mercado',
-    cor: 0xFF0000,
-    emoji: '🔴'
-  },
-  {
-    nome: 'A Bola Internacional',
-    url: 'https://www.abola.pt/rss/internacional',
-    cor: 0xFF0000,
-    emoji: '🌍'
-  },
-  {
-    nome: 'Record',
-    url: 'https://www.record.pt/rss',
-    cor: 0x006400,
-    emoji: '🟢'
-  },
-  {
-    nome: 'O Jogo',
-    url: 'https://www.ojogo.pt/rss/Noticias.rss',
-    cor: 0xFF8C00,
-    emoji: '🟠'
-  },
-  {
-    nome: 'Maisfutebol',
-    url: 'https://maisfutebol.iol.pt/rss/transferencias',
-    cor: 0x0099FF,
-    emoji: '🔵'
-  }
+  { nome: 'A Bola', url: 'https://www.abola.pt/rss/mercado', cor: 0xFF0000, emoji: '🔴' },
+  { nome: 'A Bola Internacional', url: 'https://www.abola.pt/rss/internacional', cor: 0xFF0000, emoji: '🌍' },
+  { nome: 'Record', url: 'https://www.record.pt/rss', cor: 0x006400, emoji: '🟢' },
+  { nome: 'O Jogo', url: 'https://www.ojogo.pt/rss/Noticias.rss', cor: 0xFF8C00, emoji: '🟠' },
+  { nome: 'Maisfutebol', url: 'https://maisfutebol.iol.pt/rss/transferencias', cor: 0x0099FF, emoji: '🔵' }
 ];
+
+// Limpa CDATA, tags HTML e espaços extra de qualquer texto vindo do RSS
+function limparTexto(texto) {
+  if (!texto) return '';
+  return texto
+    .replace(/<!\[CDATA\[/g, '')
+    .replace(/\]\]>/g, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
 
 function contemPalavraChavePT(texto) {
   const t = texto.toLowerCase();
@@ -92,8 +77,9 @@ async function traduzirParaPortugues(texto) {
       })
     });
     const data = await response.json();
-    return data.content?.[0]?.text || texto;
+    return limparTexto(data.content?.[0]?.text || texto);
   } catch (e) {
+    console.error('Erro na tradução:', e.message);
     return texto;
   }
 }
@@ -103,10 +89,12 @@ async function verificarFeedPT(feed, channel) {
     const dados = await parser.parseURL(feed.url);
 
     for (const item of dados.items.slice(0, 10)) {
-      const titulo = item.title || '';
+      const tituloRaw = item.title || '';
+      const titulo = limparTexto(tituloRaw);
       const link = item.link || '';
-      const descricao = item.contentSnippet || item.content || '';
+      const descricao = limparTexto(item.contentSnippet || item.content || '');
 
+      // Usa o título limpo como chave para evitar duplicados
       if (noticiasPublicadas.has(titulo)) continue;
       if (!contemPalavraChavePT(titulo) && !contemPalavraChavePT(descricao)) continue;
 
@@ -121,9 +109,7 @@ async function verificarFeedPT(feed, channel) {
 
       if (descricao) {
         embed.setDescription(
-          descricao.length > 200
-            ? descricao.substring(0, 200) + '...'
-            : descricao
+          descricao.length > 200 ? descricao.substring(0, 200) + '...' : descricao
         );
       }
 
@@ -136,26 +122,30 @@ async function verificarFeedPT(feed, channel) {
 }
 
 async function verificarFabrizio(channel) {
+  const FEED_URL = 'https://caughtoffside.substack.com/feed';
+  console.log('A verificar feed do Fabrizio...');
+
   try {
-    const dados = await parser.parseURL('https://caughtoffside.substack.com/feed');
+    const dados = await parser.parseURL(FEED_URL);
+    console.log(`Fabrizio: ${dados.items.length} itens encontrados no feed.`);
 
     for (const item of dados.items.slice(0, 8)) {
-      const titulo = item.title || '';
-      const descricao = item.contentSnippet || '';
+      const tituloRaw = item.title || '';
+      const titulo = limparTexto(tituloRaw);
+      const descricao = limparTexto(item.contentSnippet || '');
       const link = item.link || '';
 
       if (noticiasPublicadas.has(titulo)) continue;
-      if (!eTransferenciaEN(titulo) && !eTransferenciaEN(descricao)) continue;
+      if (!eTransferenciaEN(titulo) && !eTransferenciaEN(descricao)) {
+        console.log(`Fabrizio: ignorado (não é transferência) — "${titulo}"`);
+        continue;
+      }
 
       noticiasPublicadas.add(titulo);
 
       const tituloTraduzido = await traduzirParaPortugues(titulo);
       const descTraduzida = descricao
-        ? await traduzirParaPortugues(
-            descricao.length > 300
-              ? descricao.substring(0, 300) + '...'
-              : descricao
-          )
+        ? await traduzirParaPortugues(descricao.length > 300 ? descricao.substring(0, 300) + '...' : descricao)
         : null;
 
       const embed = new EmbedBuilder()
@@ -168,6 +158,7 @@ async function verificarFabrizio(channel) {
       if (descTraduzida) embed.setDescription(descTraduzida);
 
       await channel.send({ embeds: [embed] });
+      console.log(`Fabrizio: publicado — "${titulo}"`);
       await new Promise(r => setTimeout(r, 1500));
     }
   } catch (e) {
@@ -185,7 +176,6 @@ async function verificarTodos() {
     }
 
     await verificarFabrizio(channel);
-
   } catch (e) {
     console.error('Erro geral:', e.message);
   }
@@ -194,7 +184,6 @@ async function verificarTodos() {
 client.once('ready', async () => {
   console.log(`Bot online: ${client.user.tag}`);
 
-  // Pré-carrega notícias já existentes para não publicar tudo de uma vez
   console.log('A carregar notícias existentes...');
   const todosFeeds = [
     ...FEEDS_PT.map(f => f.url),
@@ -205,7 +194,7 @@ client.once('ready', async () => {
     try {
       const dados = await parser.parseURL(url);
       for (const item of dados.items.slice(0, 10)) {
-        if (item.title) noticiasPublicadas.add(item.title);
+        if (item.title) noticiasPublicadas.add(limparTexto(item.title));
       }
     } catch (e) {
       console.error(`Erro ao pré-carregar ${url}:`, e.message);
@@ -214,7 +203,6 @@ client.once('ready', async () => {
 
   console.log(`${noticiasPublicadas.size} notícias carregadas. Bot pronto!`);
 
-  // Verifica a cada 30 minutos
   setInterval(verificarTodos, 30 * 60 * 1000);
 });
 
