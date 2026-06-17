@@ -62,25 +62,17 @@ function eTransferenciaEN(texto) {
   return temTransfer && !temExclusao;
 }
 
+// Tradução gratuita via API pública do Google Translate (sem chave, sem custo)
 async function traduzirParaPortugues(texto) {
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 300,
-        messages: [{
-          role: 'user',
-          content: `Traduz este texto de futebol para português de Portugal. Responde APENAS com a tradução, sem explicações:\n\n${texto}`
-        }]
-      })
-    });
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=pt&dt=t&q=${encodeURIComponent(texto)}`;
+    const response = await fetch(url);
     const data = await response.json();
-    return limparTexto(data.content?.[0]?.text || texto);
+    const traducao = data[0].map(parte => parte[0]).join('');
+    return limparTexto(traducao);
   } catch (e) {
     console.error('Erro na tradução:', e.message);
-    return texto;
+    return texto; // se falhar, devolve o texto original em inglês
   }
 }
 
@@ -95,7 +87,8 @@ async function verificarFeedPT(feed, channel) {
       const descricao = limparTexto(item.contentSnippet || item.content || '');
 
       if (noticiasPublicadas.has(titulo)) continue;
-      if (!contemPalavraChavePT(titulo) && !contemPalavraChavePT(descricao)) continue;
+      // Filtro mais estrito: só valida pelo título, não pela descrição
+      if (!contemPalavraChavePT(titulo)) continue;
 
       noticiasPublicadas.add(titulo);
 
@@ -134,12 +127,7 @@ async function verificarFabrizio(channel) {
       const descricao = limparTexto(item.contentSnippet || '');
       const link = item.link || '';
 
-      console.log(`Fabrizio: a analisar — "${titulo}"`);
-
-      if (noticiasPublicadas.has(titulo)) {
-        console.log(`Fabrizio: já publicado anteriormente — ignorado`);
-        continue;
-      }
+      if (noticiasPublicadas.has(titulo)) continue;
       if (!eTransferenciaEN(titulo) && !eTransferenciaEN(descricao)) {
         console.log(`Fabrizio: não bate nas palavras-chave — ignorado`);
         continue;
@@ -207,16 +195,7 @@ client.once('ready', async () => {
 
   console.log(`${noticiasPublicadas.size} notícias carregadas. Bot pronto!`);
 
-  // Teste imediato do Fabrizio ao arrancar (depois de marcar as existentes,
-  // mas vamos forçar a publicar uma para confirmar que está tudo a funcionar)
-  console.log('--- TESTE INICIAL: a forçar verificação do Fabrizio ---');
-  await verificarFabrizio(channel_de_teste());
-
   setInterval(verificarTodos, 30 * 60 * 1000);
 });
-
-function channel_de_teste() {
-  return client.channels.cache.get(CHANNEL_ID);
-}
 
 client.login(TOKEN);
