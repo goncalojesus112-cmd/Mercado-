@@ -127,12 +127,16 @@ async function verificarFabrizio(channel) {
       const descricao = limparTexto(item.contentSnippet || '');
       const link = item.link || '';
 
-      if (noticiasPublicadas.has(titulo)) continue;
-      if (!eTransferenciaEN(titulo) && !eTransferenciaEN(descricao)) {
-        console.log(`Fabrizio: não bate nas palavras-chave — ignorado`);
+     if (noticiasPublicadas.has(titulo)) {
+        console.log(`Fabrizio: já visto antes — "${titulo}"`);
         continue;
       }
-
+      if (!eTransferenciaEN(titulo) && !eTransferenciaEN(descricao)) {
+        console.log(`Fabrizio: NOVO mas não bate nas palavras-chave — "${titulo}"`);
+        continue;
+      }
+      console.log(`Fabrizio: NOVO e relevante, a publicar — "${titulo}"`);
+      
       noticiasPublicadas.add(titulo);
 
       const tituloTraduzido = await traduzirParaPortugues(titulo);
